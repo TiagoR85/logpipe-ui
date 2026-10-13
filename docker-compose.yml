@@ -65,8 +65,11 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
-      ingest:
-        condition: service_started
+      # Intentionally NOT depending on ingest: ingest waits for search's gRPC
+      # port, and search's Jwt:Authority (ingest) is only resolved lazily at
+      # first token validation. An ingest dependency here would form a cycle
+      # (ingest -> search -> ingest) that Compose rejects. Tokens are minted by
+      # the UI/producer long after both are up, so the lazy link is safe.
 
   ui:
     build: .
