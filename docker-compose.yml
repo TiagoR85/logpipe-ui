@@ -37,7 +37,7 @@ services:
       - "8090:8090"
     environment:
       Redis__Configuration: redis:6379
-      Search__GrpcUrl: http://search:8091
+      Search__GrpcUrl: http://search:8093
       Oidc__Issuer: http://ingest:8090
       Oidc__ClientSecret: ${OIDC_CLIENT_SECRET:?set in .env}
       Oidc__DbPath: /tmp/openiddict.db
@@ -53,15 +53,18 @@ services:
     restart: unless-stopped
     ports:
       - "8091:8091"
+      - "8093:8093"
     environment:
-      # appsettings.json binds http://localhost:8091 for host-local dev; Dockerfile
-      # ENV can't override it (appsettings > Dockerfile ENV). Setting the endpoint
-      # URL via env rebuilds the endpoint from scratch and drops its Protocols
-      # setting (which defaults to HTTP/1.1-only) — and ingest's gRPC client
-      # requires HTTP/2, so the connection is rejected with HTTP_1_1_REQUIRED.
-      # Compose therefore re-declares Protocols alongside the URL.
+      # Kestrel only negotiates HTTP versions via TLS/ALPN. On cleartext,
+      # Http1AndHttp2 accepts the h2c preface but immediately sends GOAWAY
+      # HTTP_1_1_REQUIRED (dotnet/aspnetcore#56984), which kills the
+      # ingest -> search gRPC hop. Search therefore exposes two cleartext
+      # ports: 8091 (HTTP/1.1 — health, metrics, query API) and
+      # 8093 (HTTP/2 only — gRPC StreamLogs).
       Kestrel__Endpoints__http__Url: http://+:8091
-      Kestrel__Endpoints__http__Protocols: Http1AndHttp2
+      Kestrel__Endpoints__http__Protocols: Http1
+      Kestrel__Endpoints__grpc__Url: http://+:8093
+      Kestrel__Endpoints__grpc__Protocols: Http2
       Jwt__RequireHttpsMetadata: "false"
       Elasticsearch__Url: http://elasticsearch:9200
       Jwt__Authority: http://ingest:8090
@@ -85,6 +88,7 @@ services:
       OAuth__ClientId: logpipe-ui
       OAuth__ClientSecret: ${OIDC_CLIENT_SECRET:?set in .env}
       OAuth__Scope: logs:read
+      Search__BaseUrl: http://search:8091
     depends_on:
       - ingest
       - search
