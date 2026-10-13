@@ -1,0 +1,98 @@
+services:
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.5.4
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - ingest
+      - search
+
+  ingest:
+    build:
+      context: https://github.com/TiagoR85/logpipe-ingest.git#main
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      Redis__Configuration: redis:6379
+      Search__GrpcUrl: http://search:8091
+      Oidc__Issuer: http://ingest:8090
+      Oidc__ClientSecret: ${OIDC_CLIENT_SECRET:?set in .env}
+      Oidc__DbPath: /tmp/openiddict.db
+    depends_on:
+      redis:
+        condition: service_healthy
+      search:
+        condition: service_started
+
+  search:
+    build:
+      context: https://github.com/TiagoR85/logpipe-search.git#main
+    restart: unless-stopped
+    ports:
+      - "8091:8091"
+    environment:
+      # appsettings.json binds http://localhost:8091 for host-local dev; Dockerfile
+      # ENV can't override it (appsettings > Dockerfile ENV), so compose sets the
+      # all-interfaces binding + disables HTTPS metadata (issuer is plain HTTP).
+      Kestrel__Endpoints__http__Url: http://+:8091
+      Jwt__RequireHttpsMetadata: "false"
+      Elasticsearch__Url: http://elasticsearch:9200
+      Jwt__Authority: http://ingest:8090
+      Retention__Days: "7"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      ingest:
+        condition: service_started
+
+  ui:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8092:8080"
+    environment:
+      OAuth__TokenUrl: http://ingest:8090/connect/token
+      OAuth__ClientId: logpipe-ui
+      OAuth__ClientSecret: ${OIDC_CLIENT_SECRET:?set in .env}
+      OAuth__Scope: logs:read
+    depends_on:
+      - ingest
+      - search
+
+  producer:
+    build:
+      context: https://github.com/TiagoR85/logpipe-ingest.git#main
+      dockerfile: samples/LogPipe.SampleProducer/Dockerfile
+    restart: unless-stopped
+    environment:
+      Oidc__BaseUrl: http://ingest:8090
+      Ingest__BaseUrl: http://ingest:8090
+      Oidc__ClientId: logpipe-writer
+      Oidc__ClientSecret: ${OIDC_CLIENT_SECRET:?set in .env}
+      Producer__IntervalSeconds: "2"
+      Producer__BatchSize: "5"
+    depends_on:
+      - ingest
