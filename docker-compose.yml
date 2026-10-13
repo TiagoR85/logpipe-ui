@@ -55,9 +55,13 @@ services:
       - "8091:8091"
     environment:
       # appsettings.json binds http://localhost:8091 for host-local dev; Dockerfile
-      # ENV can't override it (appsettings > Dockerfile ENV), so compose sets the
-      # all-interfaces binding + disables HTTPS metadata (issuer is plain HTTP).
+      # ENV can't override it (appsettings > Dockerfile ENV). Setting the endpoint
+      # URL via env rebuilds the endpoint from scratch and drops its Protocols
+      # setting (which defaults to HTTP/1.1-only) — and ingest's gRPC client
+      # requires HTTP/2, so the connection is rejected with HTTP_1_1_REQUIRED.
+      # Compose therefore re-declares Protocols alongside the URL.
       Kestrel__Endpoints__http__Url: http://+:8091
+      Kestrel__Endpoints__http__Protocols: Http1AndHttp2
       Jwt__RequireHttpsMetadata: "false"
       Elasticsearch__Url: http://elasticsearch:9200
       Jwt__Authority: http://ingest:8090
