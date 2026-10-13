@@ -5,6 +5,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <CoverletOutput>$(MSBuildThisFileDirectory)coverage\</CoverletOutput>
+    <Threshold>80</Threshold>
+    <ThresholdType>line</ThresholdType>
+    <Exclude>[*.Tests]*</Exclude>
+    <ExcludeByFile>**/Program.cs</ExcludeByFile>
   </PropertyGroup>
   <ItemGroup>
     <Using Include="Xunit" />

@@ -1,0 +1,42 @@
+@page "/trace/{TraceId}"
+@inject ILogSearchClient Client
+
+<PageTitle>logpipe — trace @TraceId</PageTitle>
+
+<h1>Trace <span class="font-monospace">@TraceId</span></h1>
+
+@if (_response is null)
+{
+    <p><em>Loading…</em></p>
+}
+else if (_response.Entries.Count == 0)
+{
+    <p class="text-body-secondary">No entries found for this trace.</p>
+}
+else
+{
+    <table class="table table-sm">
+        <thead>
+            <tr><th>Timestamp</th><th>Level</th><th>Service</th><th>Message</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var entry in _response.Entries)
+            {
+                <tr data-testid="trace-row">
+                    <td>@entry.Timestamp.ToString("HH:mm:ss.fff")</td>
+                    <td><LevelBadge Level="@entry.Level" /></td>
+                    <td>@entry.Service</td>
+                    <td>@entry.Message</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public string TraceId { get; set; } = "";
+    private TraceResponse? _response;
+
+    protected override async Task OnInitializedAsync() =>
+        _response = await Client.GetTraceAsync(TraceId);
+}

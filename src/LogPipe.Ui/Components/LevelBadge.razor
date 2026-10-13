@@ -1,0 +1,13 @@
+<span class="badge @CssClass" data-testid="badge">@Level</span>
+
+@code {
+    [Parameter] public string Level { get; set; } = "Information";
+
+    private string CssClass => Level switch
+    {
+        "Critical" or "Error" => "text-bg-danger",
+        "Warning" => "text-bg-warning",
+        "Information" => "text-bg-info",
+        _ => "text-bg-secondary"
+    };
+}
