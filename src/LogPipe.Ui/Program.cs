@@ -13,19 +13,28 @@ builder.Services.AddSingleton(
     builder.Configuration.GetSection("OAuth").Get<OAuthClientOptions>()
         ?? throw new InvalidOperationException("Missing required configuration: OAuth. See .env.example."));
 
-// Both the token provider and the search client share one HttpClient whose
-// BaseAddress is derived from OAuth:TokenUrl — the einvoice-worker f3ee1f2
-// lesson applied at the hub boundary.
+// Search and token are different origins: /v1/logs must never resolve against
+// OAuth:TokenUrl (ingest), or the UI would query the ingest API instead of search.
+string searchBaseUrl = builder.Configuration["Search:BaseUrl"]
+    ?? throw new InvalidOperationException("Missing required configuration: Search:BaseUrl. See .env.example.");
+
+// The token provider gets its own client (BaseAddress = token origin).
 builder.Services.AddHttpClient<OAuthTokenProvider>((sp, client) =>
 {
     var options = sp.GetRequiredService<OAuthClientOptions>();
     client.BaseAddress = new Uri(options.TokenUrl, UriKind.Absolute);
 });
 
-// LogSearchClient reuses the same named client and the token provider.
+// Separate named client for search: sharing the token client would resolve
+// /v1/logs against the ingest origin (OAuth:TokenUrl) instead of search.
+builder.Services.AddHttpClient("Search", client =>
+{
+    client.BaseAddress = new Uri(searchBaseUrl, UriKind.Absolute);
+});
+
 builder.Services.AddSingleton<ILogSearchClient>(sp =>
     new LogSearchClient(
-        sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(OAuthTokenProvider)),
+        sp.GetRequiredService<IHttpClientFactory>().CreateClient("Search"),
         sp.GetRequiredService<OAuthTokenProvider>()));
 
 var app = builder.Build();
