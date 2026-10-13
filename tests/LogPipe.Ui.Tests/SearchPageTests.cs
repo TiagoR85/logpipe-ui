@@ -79,4 +79,80 @@ public sealed class SearchPageTests : BunitContext
         cut.WaitForAssertion(() => Assert.Contains("No log entries", cut.Markup,
             StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public async Task Enter_key_triggers_search_and_resets_page()
+    {
+        var fake = Register();
+        var cut = Render<Search>();
+        await Task.Yield();
+
+        var input = cut.Find("[data-testid=search-input]");
+        input.Input("timeout");
+        input.KeyDown("Enter");
+        await Task.Yield();
+
+        Assert.Equal("timeout", fake.LastQ);
+        Assert.Equal(1, fake.LastPage);
+    }
+
+    [Fact]
+    public async Task Facet_level_click_applies_level_filter()
+    {
+        var fake = Register(new FakeSearchClient
+        {
+            Response = new SearchResponse(1,
+                [new SearchHit("e1", DateTimeOffset.UtcNow, "Error", "api", "boom", null, null, null)],
+                new SearchFacets([new FacetBucket("Error", 1)], [new FacetBucket("api", 1)]))
+        });
+        var cut = Render<Search>();
+        await Task.Yield();
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-testid=facet-level]")));
+
+        cut.FindAll("[data-testid=facet-level]").First().Click();
+        await Task.Yield();
+
+        Assert.Equal("Error", fake.LastLevel);
+        Assert.Equal(1, fake.LastPage);
+    }
+
+    [Fact]
+    public async Task Facet_service_click_applies_service_filter()
+    {
+        var fake = Register(new FakeSearchClient
+        {
+            Response = new SearchResponse(1,
+                [new SearchHit("e1", DateTimeOffset.UtcNow, "Error", "api", "boom", null, null, null)],
+                new SearchFacets([new FacetBucket("Error", 1)], [new FacetBucket("api", 1)]))
+        });
+        var cut = Render<Search>();
+        await Task.Yield();
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-testid=facet-service]")));
+
+        cut.FindAll("[data-testid=facet-service]").First().Click();
+        await Task.Yield();
+
+        Assert.Equal("api", fake.LastService);
+        Assert.Equal(1, fake.LastPage);
+    }
+
+    [Fact]
+    public async Task Pagination_next_and_prev_change_page()
+    {
+        var fake = Register(new FakeSearchClient
+        {
+            Response = new SearchResponse(21, [], new([], []))
+        });
+        var cut = Render<Search>();
+        await Task.Yield();
+        cut.WaitForAssertion(() => Assert.Contains("21 results", cut.Markup));
+
+        cut.FindAll("button").First(b => b.TextContent == "Next").Click();
+        await Task.Yield();
+        Assert.Equal(2, fake.LastPage);
+
+        cut.FindAll("button").First(b => b.TextContent == "Prev").Click();
+        await Task.Yield();
+        Assert.Equal(1, fake.LastPage);
+    }
 }
