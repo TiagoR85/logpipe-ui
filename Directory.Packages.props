@@ -10,6 +10,6 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <PackageVersion Include="coverlet.msbuild" Version="10.1.0" />
     <PackageVersion Include="bunit" Version="2.11.3" />
-    <PackageVersion Include="WireMock.Net" Version="2.19.0" />
+    <PackageVersion Include="WireMock.Net" Version="2.20.0" />
   </ItemGroup>
 </Project>
